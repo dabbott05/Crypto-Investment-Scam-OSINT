@@ -80,10 +80,10 @@ pip3 install websocket-client requests --break-system-packages
 
 **2. Create the data directory:**
 
-#### This is where the automated scripts will save the daily target and confirmed scam lists
+#### This is where the automated scripts will save the daily target and confirmed scam lists (replace * with your local username)
 
 ```
-mkdir /home/lild/scam_logs
+mkdir /home/*/scam_logs
 ```
 
 **3. Clone the repository and configure scripts:**
