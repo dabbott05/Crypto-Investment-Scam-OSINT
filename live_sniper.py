@@ -43,7 +43,8 @@ def on_message(ws, message):
                 
                 # DAILY LOGGING 
                 today = datetime.datetime.now().strftime("%Y-%m-%d")
-                daily_filename = f"/home/lild/scam_logs/targets_{today}.txt"
+                daily_filename = f"/home/*/scam_logs/targets_{today}.txt"
+                # Replace * with your local username
                 
                 print(f"\n[*] Target Locked: {strict_url} -> Saving to {daily_filename}")
                 with open(daily_filename, "a") as file:
