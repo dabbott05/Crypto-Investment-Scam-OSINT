@@ -24,15 +24,17 @@ Instead of relying on public APIs, we download and run the pre-compiled CertStre
 
 **1. Create the directory and download the binary:**
 ```
-mkdir -p /home/lild/go/bin/
-wget -O /home/lild/go/bin/certstream-server-go [https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64](https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64)
-chmod +x /home/lild/go/bin/certstream-server-go
+# replace * with your local username
+mkdir -p /home/*/go/bin/
+wget -O /home/*/go/bin/certstream-server-go [https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64](https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64)
+chmod +x /home/*/go/bin/certstream-server-go
 ```
 
 **2. Download the default configuration file:**
 
 ```
-wget -O /home/lild/go/bin/config.yaml [https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml](https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml)
+# replace * with your local username
+wget -O /home/*/go/bin/config.yaml [https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml](https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml)
 ```
 
 
@@ -42,9 +44,10 @@ wget -O /home/lild/go/bin/config.yaml [https://raw.githubusercontent.com/d-Ricky
 sudo nano /etc/systemd/system/certstream.service
 ```
 
-**Paste the following: (change * to your local user name)**
+**Paste the following:
 
 ```
+# replace * with your local username
 [Unit]
 Description=CertStream God Mode Server
 After=network.target
