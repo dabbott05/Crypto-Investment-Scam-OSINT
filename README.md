@@ -58,7 +58,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=lild
+User=*
 WorkingDirectory=/home/*/go/bin/
 Restart=always
 RestartSec=5
