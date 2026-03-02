@@ -6,7 +6,7 @@ By running a local CertStream server natively, this architecture completely bypa
 
 ## Notes
 1. **The Blog**: Check out the blog to see my progress, interesting finds, and new ideas!
-2. **Log FIles**: I will try to upload the files I log for the day the day after I submit them to be flagged
+2. **Log FIles**: I will try to upload the files I log for the day the day after I submit them to be flagged . So the log files for March 1st 2026 would be posted on March 2nd 2026 .
 
 ## Architecture Flow
 
