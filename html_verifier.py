@@ -1,3 +1,5 @@
+# REPLACE THE * WITH YOUR LOCAL PI's USERNAME
+
 import os
 import requests
 import urllib3
@@ -6,26 +8,38 @@ import datetime
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# DYNAMIC DAILY LOGGING
-today = datetime.datetime.now().strftime("%Y-%m-%d")
+# --- DYNAMIC DAILY LOGGING ---
+adjusted_time = datetime.datetime.now() - datetime.timedelta(hours=6)
+today = adjusted_time.strftime("%Y-%m-%d")
 INPUT_FILE = f"/home/*/scam_logs/targets_{today}.txt"
 OUTPUT_FILE = f"/home/*/scam_logs/confirmed_{today}.txt"
-# Replace * with your local username
 
-# INTERSECTION DICTIONARIES
-CRYPTO_TERMS = ['bitcoin', 'usdt', 'ethereum', 'crypto', 'wallet address', 'deposit amount', 'withdraw']
-HYIP_TERMS = ['daily roi', 'investment plan', 'standard plan', 'premium plan', 'daily return', 'silver plan', 'gold plan', 'mining plan', 'referral commission', 'minimum deposit', 'task center', 'frozen amount', 'recharge']
+# --- INTERSECTION DICTIONARIES ---
+# CREATE YOUR OWN KEYWORDS TO TRIGGER
+CRYPTO_TERMS = ['bitcoin', 'crypto']
+HYIP_TERMS = ['daily roi', 'investment plan']
 
 active_threats = []
 seen_urls = set()
 write_lock = threading.Lock()
 
+# --- OPTION B: PRE-LOAD PREVIOUSLY CONFIRMED ---
+if os.path.exists(OUTPUT_FILE):
+    with open(OUTPUT_FILE, 'r') as f:
+        # Adds already confirmed URLs to seen_urls so they are skipped instantly
+        for line in f:
+            url = line.strip()
+            if url:
+                seen_urls.add(url)
+
 def check_html_and_save(target):
+    # Ensure URL is clean for comparison
     strict_url = target if target.startswith("http") else f"https://{target}/"
-    if strict_url in seen_urls: return
+    
+    if strict_url in seen_urls: 
+        return
         
     try:
-        # 5-second timeout is critical so dead servers don't stall the Pi
         response = requests.get(strict_url, timeout=5, verify=False, headers={'User-Agent': 'Mozilla/5.0'})
         
         if response.status_code == 200:
@@ -34,11 +48,11 @@ def check_html_and_save(target):
             crypto_hits = sum(1 for term in CRYPTO_TERMS if term in html_body)
             hyip_hits = sum(1 for term in HYIP_TERMS if term in html_body)
             
-            # Must have 1 Crypto footprint AND 2 HYIP footprints
             if crypto_hits >= 1 and hyip_hits >= 2:
-                print(f"[+] SCAM CONFIRMED: {strict_url}")
+                print(f"[+] NEW SCAM CONFIRMED: {strict_url}")
                 with write_lock:
                     active_threats.append(strict_url)
+                    # Using "a" for append mode ensures we don't overwrite morning hits
                     with open(OUTPUT_FILE, "a") as file:
                         file.write(f"{strict_url}\n")
                     seen_urls.add(strict_url)
@@ -52,19 +66,22 @@ if __name__ == "__main__":
     with open(INPUT_FILE, "r") as file:
         targets = [line.strip() for line in file if line.strip()]
         
-    print(f"[*] Scanning {len(targets)} targets from today's log...\n")
+    # Filter out targets already in seen_urls to give an accurate count
+    new_targets = [t for t in targets if (t if t.startswith("http") else f"https://{t}/") not in seen_urls]
+    
+    print(f"[*] Loaded {len(seen_urls)} already confirmed scams.")
+    print(f"[*] Scanning {len(new_targets)} NEW targets from today's log...\n")
     
     threads = []
-    for target in targets:
+    for target in new_targets:
         t = threading.Thread(target=check_html_and_save, args=(target,))
         threads.append(t)
         t.start()
         
-        # Only 20 threads for Raspberry Pi stability
-        if len(threads) >= 20:
+        if len(threads) >= 20: # This is at 20 since I am using a rasberry Pi and I dont want to destroy it . If you can run 100 threads ... do it !!!
             for t in threads: t.join()
             threads = []
             
     for t in threads: t.join()
         
-    print(f"\n[+] Complete! Saved {len(active_threats)} active scams to {OUTPUT_FILE}.")
+    print(f"\n[+] Complete! Added {len(active_threats)} NEW scams to {OUTPUT_FILE}.")
