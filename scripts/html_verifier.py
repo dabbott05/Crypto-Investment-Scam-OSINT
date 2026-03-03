@@ -9,10 +9,14 @@ import datetime
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# we subtract 6 hours because the script can take a long time to run causing it to go to the next day
+# before it finishes . basically dont run this script before between 12am - 6 am ...
+# i know there is a better way to fix this
 adjusted_time = datetime.datetime.now() - datetime.timedelta(hours=6)
 today = adjusted_time.strftime("%Y-%m-%d")
-INPUT_FILE = f"/home/lild/scam_logs/targets_{today}.txt"
-OUTPUT_FILE = f"/home/lild/scam_logs/confirmed_{today}.txt"
+# change * to your local username
+INPUT_FILE = f"/home/*/scam_logs/targets_{today}.txt"
+OUTPUT_FILE = f"/home/*/scam_logs/confirmed_{today}.txt"
 
 CRYPTO_TERMS = ['bitcoin', 'usdt', 'ethereum', 'crypto', 'wallet address', 'deposit amount', 'withdraw']
 HYIP_TERMS = ['daily roi', 'investment plan', 'standard plan', 'premium plan', 'daily return', 'silver plan', 'gold plan', 'mining plan', 'referral commission', 'minimum deposit', 'task center', 'frozen amount', 'recharge']
@@ -76,7 +80,7 @@ if __name__ == "__main__":
         threads.append(t)
         t.start()
 
-        time.sleep(0.1)
+        time.sleep(0.1) # this helps whenver you run this script at the same time as live_sniper.py
         if len(threads) >= 20:
             for t in threads: t.join()
             threads = []
