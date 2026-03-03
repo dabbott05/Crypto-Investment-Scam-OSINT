@@ -7,10 +7,10 @@ import time
 # Pointing to the Go server running on the exact same Pi
 CERTSTREAM_URL = "ws://127.0.0.1:8080/" 
 
-CRYPTO_BASE = ['crypto', 'btc', 'eth', 'usdt', 'coin', 'bit', 'hash', 'token']
-ACTION_BASE = ['invest', 'earn', 'profit', 'mine', 'mining', 'yield', 'roi', 'trade', 'double']
-TRUST_BASE = ['legit', 'elite', 'global', 'capital', 'wealth', 'fund', 'prime', 'secure']
-HIGH_RISK_TLDS = ['.top', '.vip', '.cc', '.ltd', '.pro', '.live']
+CRYPTO_BASE = ['crypto', 'btc']
+ACTION_BASE = ['invest', 'earn']
+TRUST_BASE = ['legit', 'elite']
+HIGH_RISK_TLDS = ['.top', '.vip']
 
 cert_count = 0
 seen_urls = set()
@@ -43,7 +43,8 @@ def on_message(ws, message):
                 seen_urls.add(strict_url)
                 
                 today = datetime.datetime.now().strftime("%Y-%m-%d")
-                daily_filename = f"/home/lild/scam_logs/targets_{today}.txt"
+                # change * to your local username
+                daily_filename = f"/home/*/scam_logs/targets_{today}.txt"
                 
                 print(f"\n[*] Target Locked: {strict_url} -> Saving to {daily_filename}")
                 with open(daily_filename, "a") as file:
