@@ -10,14 +10,15 @@ By running a local CertStream server natively, this architecture completely bypa
 
 ## Architecture Flow
 
-1. **The Firehose (`certstream-server-go`):** Runs as a background `systemd` daemon, independently pulling raw SSL/TLS certificate registrations from Google and Let's Encrypt directly into the Pi's memory.
-2. **The Live Sniper (`live_sniper.py`):** A Python WebSocket client running persistently in `tmux`. It connects to the local Firehose (127.0.0.1), applies strict intersection filtering to catch crypto-scam domains, and logs them dynamically by date.
-3. **The Deep Verifier (`html_verifier.py`):** An automated Python scanner triggered by `cron` at 11:50 PM daily. It visits the day's suspect domains, analyzes their raw HTML for specific scam footprints (HYIP templates, fake crypto wallets), and outputs verified, actionable targets.
+1. **The Firehose (`certstream-server-go`):** Runs as a background `systemd` daemon, pulling raw SSL/TLS certificate registrations from public Certificate Transparency logs into the Pi's memory.
+2. **The Live Sniper (`live_sniper.py`):** A Python WebSocket client running persistently in `tmux`. It connects to the local Firehose (127.0.0.1), applies strict intersection filtering to catch crypto-scam domains, and logs them dynamically by date. Auto-reconnects on disconnection — no manual restart needed.
+3. **The Deep Verifier (`html_verifier.py`):** An automated Python scanner triggered by `cron` at 11:50 PM daily. It visits the day's suspect domains through a residential proxy, analyzes their raw HTML for specific scam footprints (HYIP templates, structural signals, title tags), and outputs verified, actionable targets.
 
 ## Prerequisites & Hardware
 * **Hardware:** Raspberry Pi (Tested on ARM64/ARMv7) with a stable internet connection.
 * **OS:** Debian/Raspberry Pi OS.
-* **Dependencies:** Python 3, `tmux`, `systemd`.
+* **Dependencies:** Python 3.9+, `tmux`, `systemd`.
+* **Proxy:** A residential proxy (e.g., Decodo/SmartProxy) with IP whitelisting for the HTML verifier.
 
 ---
 
@@ -30,7 +31,7 @@ Instead of relying on public APIs, we download and run the pre-compiled CertStre
 ```
 # replace * with your local username
 mkdir -p /home/*/go/bin/
-wget -O /home/*/go/bin/certstream-server-go [https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64] https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64
+wget -O /home/*/go/bin/certstream-server-go https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64
 chmod +x /home/*/go/bin/certstream-server-go
 ```
 
@@ -38,7 +39,7 @@ chmod +x /home/*/go/bin/certstream-server-go
 
 ```
 # replace * with your local username
-wget -O /home/*/go/bin/config.yaml [https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml] https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml
+wget -O /home/*/go/bin/config.yaml https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml
 ```
 
 
@@ -100,7 +101,9 @@ mkdir /home/*/scam_logs
 
 **3. Configure the proxy:**
 
-The HTML verifier routes all requests through a residential proxy to avoid exposing your Pi's IP to scam domains. Copy the example and fill in your proxy details:
+The HTML verifier routes all requests through a residential proxy to avoid exposing your Pi's IP to scam domains. Note: only `html_verifier.py` uses the proxy — `live_sniper.py` connects to the local CertStream server and does not require proxy configuration.
+
+Copy the example and fill in your proxy details:
 
 ```bash
 cp .env.example .env
@@ -120,15 +123,15 @@ Look through the code for `live_sniper.py` and `html_verifier.py` for any path c
 
 ### Phase 3: Autonomous Execution
 
+**1. Launch the Live Sniper in tmux:**
+
 ```bash
 source .venv/bin/activate
 tmux new -s sniper
 python3 scripts/live_sniper.py
 ```
 
-**IMPORTANT**
-
-When you want to detach the feed of all the domains being detected **only use this keystroke**
+The sniper will automatically reconnect if the CertStream server restarts. It also loads any existing targets from today's log on startup to avoid duplicates after a restart.
 
 **Press Ctrl+B, then D to detach and leave it running in the background.**
 

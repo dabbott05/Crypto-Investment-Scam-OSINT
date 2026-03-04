@@ -8,7 +8,7 @@ import threading
 import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 
@@ -43,7 +43,7 @@ CRYPTO_REGEX = re.compile(
     r"\b(bitcoin|btc|ethereum|eth|usdt|tether|bnb|trx|tron|solana|litecoin|dogecoin|crypto|blockchain|mining|staking|defi|web3|wallet|token|hash|miner)\b"
 )
 HYIP_REGEX = re.compile(
-    r"\b(daily roi|investment plan|guaranteed profit|passive income|earn daily|referral bonus|minimum deposit|instant withdrawal|compound interest|high yield|roi calculator|deposit now|start earning|join now and earn|guaranteed return|forex trading|copy trading|auto trading)\b"
+    r"\b(daily\s+roi|investment\s+plan|guaranteed\s+profit|passive\s+income|earn\s+daily|referral\s+bonus|minimum\s+deposit|instant\s+withdrawal|compound\s+interest|high\s+yield|roi\s+calculator|deposit\s+now|start\s+earning|join\s+now\s+and\s+earn|guaranteed\s+return|forex\s+trading|copy\s+trading|auto\s+trading)\b"
 )
 
 # structural signals — HYIP template DNA detectable from raw HTML
@@ -61,6 +61,8 @@ SCAM_STRUCTURE_REGEX = re.compile(
 active_threats = []
 seen_urls = set()
 write_lock = threading.Lock()
+consecutive_failures = 0
+MAX_CONSECUTIVE_FAILURES = 10
 
 # preload files into memory to avoid re-reading the same file multiple times during execution
 if os.path.exists(OUTPUT_FILE):
@@ -71,16 +73,20 @@ if os.path.exists(OUTPUT_FILE):
                 seen_urls.add(url)
 
 
-def check_html_and_save(target):
-    base_target = target if not target.startswith("http") else target.split("//")[-1]
+def normalize_url(target):
+    """Strip scheme and trailing slashes, rebuild as https://domain/"""
+    base = target.split("//")[-1].rstrip("/") if "://" in target else target.rstrip("/")
+    return f"https://{base}/"
 
-    # try HTTPS first, but we need to know the base URL
-    strict_url = f"https://{base_target}/"
+
+def check_html_and_save(target):
+    global consecutive_failures
+    strict_url = normalize_url(target)
     if strict_url in seen_urls:
         return
 
     try:
-        # stream=True prevents massive downloads
+        # stream=True defers body download; we read only the first chunk below and then stop
         response = requests.get(
             strict_url,
             timeout=(3, 5),
@@ -90,8 +96,11 @@ def check_html_and_save(target):
             proxies=PROXIES,
         )
 
-        if response.status_code == 200:
-            # we only read the first 75KB of the HTML to check for keywords, which is usually enough to confirm a scam
+        try:
+            if response.status_code != 200:
+                return
+
+            # read only the first ~73 KB of HTML — usually enough to detect scam fingerprints
             html_body = ""
             for chunk in response.iter_content(chunk_size=75000):
                 if chunk:
@@ -122,42 +131,59 @@ def check_html_and_save(target):
                 print(f"[+] NEW SCAM CONFIRMED: {strict_url}")
 
                 with write_lock:
-                    active_threats.append(strict_url)
                     with open(OUTPUT_FILE, "a") as file:
                         file.write(f"{strict_url}\n")
+                    active_threats.append(strict_url)
                     seen_urls.add(strict_url)
+        finally:
+            response.close()
+
+        consecutive_failures = 0
 
     except requests.RequestException as e:
         print(f"[-] {strict_url}: {e}", flush=True)
+        consecutive_failures += 1
+        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+            print(
+                f"[!!!] {MAX_CONSECUTIVE_FAILURES} consecutive failures — proxy may be down.",
+                flush=True,
+            )
 
 
 if __name__ == "__main__":
-    if not os.path.exists(INPUT_FILE):
-        print(f"[-] No targets found for today ({INPUT_FILE}). Exiting.")
-        exit()
+    try:
+        if not os.path.exists(INPUT_FILE):
+            print(f"[-] No targets found for today ({INPUT_FILE}). Exiting.")
+            exit()
 
-    with open(INPUT_FILE, "r") as file:
-        targets = [line.strip() for line in file if line.strip()]
+        with open(INPUT_FILE, "r") as file:
+            targets = [line.strip() for line in file if line.strip()]
 
-    new_targets = [
-        t
-        for t in targets
-        if (t if t.startswith("http") else f"https://{t}/") not in seen_urls
-    ]
+        new_targets = [t for t in targets if normalize_url(t) not in seen_urls]
 
-    print(f"[*] Loaded {len(seen_urls)} already confirmed scams.")
-    print(f"[*] Scanning {len(new_targets)} NEW targets from today's log...\n")
+        print(f"[*] Loaded {len(seen_urls)} already confirmed scams.")
+        print(f"[*] Scanning {len(new_targets)} NEW targets from today's log...\n")
 
-    # replace manual threading with ThreadPoolExecutor for better performance and cleaner code
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        executor.map(check_html_and_save, new_targets)
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(check_html_and_save, t) for t in new_targets]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"[!!!] Worker thread crashed: {e}", flush=True)
 
-    print(f"\n[+] Complete! Added {len(active_threats)} NEW scams to {OUTPUT_FILE}.")
-
-    if len(new_targets) > 0:
-        hit_rate = (len(active_threats) / len(new_targets)) * 100
         print(
-            f"[*] Session Hit Rate: {hit_rate:.2f}% ({len(active_threats)}/{len(new_targets)} scanned)"
+            f"\n[+] Complete! Added {len(active_threats)} NEW scams to {OUTPUT_FILE}."
         )
-    else:
-        print("[*] Session Hit Rate: N/A (0 new targets scanned)")
+
+        if len(new_targets) > 0:
+            hit_rate = (len(active_threats) / len(new_targets)) * 100
+            print(
+                f"[*] Session Hit Rate: {hit_rate:.2f}% ({len(active_threats)}/{len(new_targets)} scanned)"
+            )
+        else:
+            print("[*] Session Hit Rate: N/A (0 new targets scanned)")
+
+    except KeyboardInterrupt:
+        print("\n[*] Interrupted by user. Exiting.")
+        sys.exit(0)

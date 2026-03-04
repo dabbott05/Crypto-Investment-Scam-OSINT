@@ -1,23 +1,26 @@
+import os
+import sys
 import websocket
 import json
 import datetime
 import time
 import re
+from zoneinfo import ZoneInfo
 
 # pointing at the server running certstream firehose
 CERTSTREAM_URL = "ws://127.0.0.1:8080/"
 
 
-# using Regex is better than for loops for keyword detection in most cases
-# since it compiles to C and runs in O(n) time
+# regex alternation is faster than a Python for-loop over keywords
+# because the matching engine runs in C — \b ensures whole-word matches only
 CRYPTO_REGEX = re.compile(
-    r"(crypto|bitcoin|btc|eth|usdt|tether|mining|defi|staking|nft|coin|wallet|token|hash|miner)"
+    r"\b(crypto|bitcoin|btc|eth|usdt|tether|mining|defi|staking|nft|coin|wallet|token|hash|miner)\b"
 )
 ACTION_REGEX = re.compile(
-    r"(invest|trade|trading|profit|earn|yield|stake|swap|exchange|capital|fund|fx|option|market|broker|asset|prime|apex|global|wealth)"
+    r"\b(invest|trade|trading|profit|earn|yield|stake|swap|exchange|capital|fund|fx|option|market|broker|asset|prime|apex|global|wealth)\b"
 )
 TRUST_REGEX = re.compile(
-    r"(legit|secure|trust|official|verified|real|guarantee|guaranteed)"
+    r"\b(legit|secure|trust|official|verified|real|guarantee|guaranteed)\b"
 )
 
 # tuples are better than lists and the .endswith() method accepts tuples
@@ -85,7 +88,9 @@ def on_message(ws, message):
                     continue
                 seen_urls.add(strict_url)
 
-                today = datetime.datetime.now().strftime("%Y-%m-%d")
+                today = datetime.datetime.now(tz=ZoneInfo("US/Central")).strftime(
+                    "%Y-%m-%d"
+                )
                 # replace * with your local username
                 daily_filename = f"/home/*/scam_logs/targets_{today}.txt"
 
@@ -93,8 +98,6 @@ def on_message(ws, message):
                 with open(daily_filename, "a") as file:
                     file.write(f"{strict_url}\n")
 
-        # zzz
-        time.sleep(0.001)
     except Exception as e:
         print(f"\n[-] Error processing message: {e}", flush=True)
 
@@ -112,12 +115,30 @@ def on_open(ws):
 
 
 if __name__ == "__main__":
+    # load today's targets into seen_urls so restarts don't produce duplicates
+    today = datetime.datetime.now(tz=ZoneInfo("US/Central")).strftime("%Y-%m-%d")
+    daily_filename = f"/home/*/scam_logs/targets_{today}.txt"
+    if os.path.exists(daily_filename):
+        with open(daily_filename, "r") as f:
+            for line in f:
+                url = line.strip()
+                if url:
+                    seen_urls.add(url)
+        print(f"[*] Loaded {len(seen_urls)} existing targets for dedup.")
+
     print("[*] Starting Autonomous Pi Sniper ...")
-    ws = websocket.WebSocketApp(
-        CERTSTREAM_URL,
-        on_open=on_open,
-        on_message=on_message,
-        on_error=on_error,
-        on_close=on_close,
-    )
-    ws.run_forever()
+    try:
+        while True:
+            ws = websocket.WebSocketApp(
+                CERTSTREAM_URL,
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close,
+            )
+            ws.run_forever()
+            print("\n[*] Reconnecting in 5 seconds...", flush=True)
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print("\n[*] Interrupted by user. Exiting.")
+        sys.exit(0)
