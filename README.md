@@ -30,7 +30,7 @@ Instead of relying on public APIs, we download and run the pre-compiled CertStre
 ```
 # replace * with your local username
 mkdir -p /home/*/go/bin/
-wget -O /home/*/go/bin/certstream-server-go [https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64](https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64)
+wget -O /home/*/go/bin/certstream-server-go [https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64] https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64
 chmod +x /home/*/go/bin/certstream-server-go
 ```
 
