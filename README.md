@@ -10,14 +10,15 @@ By running a local CertStream server natively, this architecture completely bypa
 
 ## Architecture Flow
 
-1. **The Firehose (`certstream-server-go`):** Runs as a background `systemd` daemon, independently pulling raw SSL/TLS certificate registrations from Google and Let's Encrypt directly into the Pi's memory.
-2. **The Live Sniper (`live_sniper.py`):** A Python WebSocket client running persistently in `tmux`. It connects to the local Firehose (127.0.0.1), applies strict intersection filtering to catch crypto-scam domains, and logs them dynamically by date.
-3. **The Deep Verifier (`html_verifier.py`):** An automated Python scanner triggered by `cron` at 11:50 PM daily. It visits the day's suspect domains, analyzes their raw HTML for specific scam footprints (HYIP templates, fake crypto wallets), and outputs verified, actionable targets.
+1. **The Firehose (`certstream-server-go`):** Runs as a background `systemd` daemon, pulling raw SSL/TLS certificate registrations from public Certificate Transparency logs into the Pi's memory.
+2. **The Live Sniper (`live_sniper.py`):** A Python WebSocket client running persistently in `tmux`. It connects to the local Firehose (127.0.0.1), applies strict intersection filtering to catch crypto-scam domains, and logs them dynamically by date. Auto-reconnects on disconnection — no manual restart needed.
+3. **The Deep Verifier (`html_verifier.py`):** An automated Python scanner triggered by `cron` at 11:50 PM daily. It visits the day's suspect domains through a residential proxy, analyzes their raw HTML for specific scam footprints (HYIP templates, structural signals, title tags), and outputs verified, actionable targets.
 
 ## Prerequisites & Hardware
 * **Hardware:** Raspberry Pi (Tested on ARM64/ARMv7) with a stable internet connection.
 * **OS:** Debian/Raspberry Pi OS.
-* **Dependencies:** Python 3, `tmux`, `systemd`.
+* **Dependencies:** Python 3.9+, `tmux`, `systemd`.
+* **Proxy:** A residential proxy (e.g., Decodo/SmartProxy) with IP whitelisting for the HTML verifier.
 
 ---
 
@@ -27,18 +28,16 @@ By running a local CertStream server natively, this architecture completely bypa
 Instead of relying on public APIs, we download and run the pre-compiled CertStream Go binary.
 
 **1. Create the directory and download the binary:**
-```
-# replace * with your local username
-mkdir -p /home/*/go/bin/
-wget -O /home/*/go/bin/certstream-server-go [https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64] https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64
-chmod +x /home/*/go/bin/certstream-server-go
+```bash
+mkdir -p ~/go/bin/
+wget -O ~/go/bin/certstream-server-go https://github.com/d-Rickyy-b/certstream-server-go/releases/download/v1.8.2/certstream-server-go_1.8.2_linux_arm64
+chmod +x ~/go/bin/certstream-server-go
 ```
 
 **2. Download the default configuration file:**
 
-```
-# replace * with your local username
-wget -O /home/*/go/bin/config.yaml [https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml] https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml
+```bash
+wget -O ~/go/bin/config.yaml https://raw.githubusercontent.com/d-Rickyy-b/certstream-server-go/master/config.sample.yaml
 ```
 
 
@@ -51,22 +50,23 @@ sudo nano /etc/systemd/system/certstream.service
 **Paste the following:**
 
 ```
-# replace * with your local username
 [Unit]
 Description=CertStream God Mode Server
 After=network.target
 
 [Service]
 Type=simple
-User=*
-WorkingDirectory=/home/*/go/bin/
+User=%i
+WorkingDirectory=/home/%i/go/bin/
 Restart=always
 RestartSec=5
-ExecStart=/home/*/go/bin/certstream-server-go
+ExecStart=/home/%i/go/bin/certstream-server-go
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+> **Note:** Replace `%i` with your actual Linux username (e.g., `pisniper`). Systemd does not expand `~` or `$USER`.
 
 **4. Enable and start the firehose:**
 
@@ -80,33 +80,45 @@ sudo systemctl start certstream
 
 **1. Install Python requirements and Tmux:**
 
-```
-sudo apt update && sudo apt install tmux python3-pip -y
-pip3 install websocket-client requests --break-system-packages
-```
-
-**2. Create the data directory:**
-
-#### This is where the automated scripts will save the daily target and confirmed scam lists (replace * with your local username)
-
-```
-mkdir /home/*/scam_logs
+```bash
+sudo apt update && sudo apt install tmux python3-pip python3-venv -y
+cd ~/CertStream-CryptoScamMonitor
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-**3. Clone the repository and configure scripts:**
+**2. Configure the proxy:**
 
-Look through the code for `live_sniper.py` and `html_verifier` for any configuration changes
+The HTML verifier routes all requests through a residential proxy to avoid exposing your Pi's IP to scam domains. Note: only `html_verifier.py` uses the proxy — `live_sniper.py` connects to the local CertStream server and does not require proxy configuration.
 
-**Phase 3: Autonomous Execution**
+Copy the example and fill in your proxy details:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Set your proxy host and port (IP must be whitelisted on the provider's dashboard):
 
 ```
+PROXY_HOST=gate.your-proxy-provider.com
+PROXY_PORT=10001
+```
+
+Both Python scripts automatically detect your home directory using `Path.home()`, so no manual path editing is required.
+
+### Phase 3: Autonomous Execution
+
+**1. Launch the Live Sniper in tmux:**
+
+```bash
+source .venv/bin/activate
 tmux new -s sniper
-python3 live_sniper.py
+python3 scripts/live_sniper.py
 ```
 
-**IMPORTANT**
-
-When you want to detach the feed of all the domains being detected **only use this keystroke**
+The sniper will automatically reconnect if the CertStream server restarts. It also loads any existing targets from today's log on startup to avoid duplicates after a restart.
 
 **Press Ctrl+B, then D to detach and leave it running in the background.**
 
@@ -114,18 +126,18 @@ When you want to detach the feed of all the domains being detected **only use th
 
 This command sets the verifier to run automatically at 11:50 PM every night to scan the day's catches.
 
-```
+```bash
 crontab -e
 
 # Add this line to the very bottom on a new line without a # in front of it
-# replace * with your local username
-
-50 23 * * * /usr/bin/python3 /home/*/html_verifier.py >> /home/*/scam_logs/verifier_cron.log 2>&1
+50 23 * * * $HOME/CertStream-CryptoScamMonitor/.venv/bin/python $HOME/CertStream-CryptoScamMonitor/scripts/html_verifier.py >> $HOME/scam_logs/verifier_cron.log 2>&1
 ```
+
+> **Note:** `cron` expands `$HOME` automatically. Do not use `~` in crontab entries — it is not expanded by cron.
 
 ## Log Management
 
-Your Raspberry Pi will now operate completely headless. Check your /home/*/scam_logs/ directory daily for two files:
+Your Raspberry Pi will now operate completely headless. Both scripts automatically create and write to `~/scam_logs/`. Check this directory daily for two files:
 
 `targets_YYYY-MM-DD.txt`: The raw suspicious domains caught by the WebSocket.
 
