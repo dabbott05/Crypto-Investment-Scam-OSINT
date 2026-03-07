@@ -8,10 +8,8 @@ April 11th : status - none
 
 TODO : 
 
-Optimize performance:
+Get rid of the same site but with a different subdomain (www.example.com vs mail.example.com) in the confirmed_XXX-XX-XX.txt file
 
-Finish playwright program for efficient wallet collection
+Improve live_sniper.py speed (we need more domains daily . lets shoot for > 18k)
 
-Create a wallet balance checker / history checker for over 50k within the last week
-
-AI Agent ???
+study the data I have to improve keywords and scoring systems
