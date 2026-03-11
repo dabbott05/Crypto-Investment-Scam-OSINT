@@ -6,7 +6,6 @@ By running a local CertStream server natively, this architecture completely bypa
 
 ## Notes
 1. **The Blog**: Check out the blog to see my progress, interesting finds, and new ideas!
-2. **Log FIles**: I will try to upload the files I log for the day the day after I submit them to be flagged . So the log files for March 1st 2026 would be posted on March 2nd 2026 .
 
 ## Architecture Flow
 
@@ -18,7 +17,7 @@ By running a local CertStream server natively, this architecture completely bypa
 * **Hardware:** Raspberry Pi (Tested on ARM64/ARMv7) with a stable internet connection.
 * **OS:** Debian/Raspberry Pi OS.
 * **Dependencies:** Python 3.9+, `tmux`, `systemd`.
-* **Proxy:** A residential proxy (e.g., Decodo/SmartProxy) with IP whitelisting for the HTML verifier.
+* **Proxy:** A proxy provider offering Username/Password authentication and port rotation (e.g., Oxylabs Dedicated Datacenter).
 
 ---
 
@@ -82,6 +81,7 @@ sudo systemctl start certstream
 
 ```bash
 sudo apt update && sudo apt install tmux python3-pip python3-venv -y
+git clone https://github.com/dabbott05/Crypto-Investment-Scam-OSINT.git ~/CertStream-CryptoScamMonitor
 cd ~/CertStream-CryptoScamMonitor
 python3 -m venv .venv
 source .venv/bin/activate
@@ -90,7 +90,7 @@ pip install -r requirements.txt
 
 **2. Configure the proxy:**
 
-The HTML verifier routes all requests through a residential proxy to avoid exposing your Pi's IP to scam domains. Note: only `html_verifier.py` uses the proxy — `live_sniper.py` connects to the local CertStream server and does not require proxy configuration.
+The HTML verifier routes all requests through a proxy to avoid exposing your Pi's IP to scam domains and to bypass rate limits. Note: only `html_verifier.py` uses the proxy — `live_sniper.py` connects to the local CertStream server directly.
 
 Copy the example and fill in your proxy details:
 
@@ -99,11 +99,17 @@ cp .env.example .env
 nano .env
 ```
 
-Set your proxy host and port (IP must be whitelisted on the provider's dashboard):
+Set your proxy credentials and port pool (configured for up to 5 rotating ports - oxylabs proxy):
 
 ```
-PROXY_HOST=gate.your-proxy-provider.com
-PROXY_PORT=10001
+OXY_GATEWAY=ddc.oxylabs.io
+PROXY_USER=your_username
+PROXY_PASS=your_password
+OXY_PORT_1=8001
+OXY_PORT_2=8002
+OXY_PORT_3=8003
+OXY_PORT_4=8004
+OXY_PORT_5=8005
 ```
 
 Both Python scripts automatically detect your home directory using `Path.home()`, so no manual path editing is required.
